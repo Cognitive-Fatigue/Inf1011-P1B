@@ -4,7 +4,7 @@ https://learn.tinycircuits.com/Processors/TinyScreen+_Setup_Tutorial/#downloads
 https://learn.tinycircuits.com/Communication/Bluetooth-Low-Energy_TinyShield_Tutorial/  
 
 On laptop:
-- `pip install pyserial bleak`
+- `pip install pyserial bleak pynput`
 - `git clone -b Pair-A https://github.com/Cognitive-Fatigue/Inf1011-P1B.git`
 - STBLE fix (do this once): the installed library's `src/arduino_bluenrg_ble.cpp` has empty functions, so Bluetooth never starts. Copy `stble-patch/arduino_bluenrg_ble.cpp` from INF1011-P1B over it, then rebuild. Without it, the watch still compiles and USB works, but no Bluetooth.
 
@@ -17,7 +17,7 @@ Upload code into tinycircuit via USB cable
 
 
 Verify that tinycircuit is running:
-tinycircuit displays: `TinyKey On`
+tinycircuit displays: the button labels in the corners and the connection state in the centre (temporary test screen until the status screen is added)
 Laptop prints `Watch connected on ...`
 Turn on and off the tinycircuit to verify that the bluetooth connection is working as it should
 
@@ -45,7 +45,7 @@ Pairs B and C never touch USB or Bluetooth. Use only these:
 - Get the code: `git clone -b Pair-A https://github.com/Cognitive-Fatigue/Inf1011-P1B.git`, then `cd Inf1011-P1B`. Run every `python laptop/...` command below from this folder (not from where the terminal opens, e.g. `C:\WINDOWS\system32`).
 - Watch: open `watch/watch.ino` in the Arduino IDE (the other tabs load with it), board "TinyScreen+", upload. Needs the STBLE library and the BLE TinyShield on the stack.
 - STBLE fix (do this once): the installed library's `src/arduino_bluenrg_ble.cpp` has empty functions, so Bluetooth never starts. Copy `stble-patch/arduino_bluenrg_ble.cpp` over it (library folder: Arduino `libraries/STBLE/src/`), then rebuild. Without it, the watch still compiles and USB works, but no Bluetooth.
-- Laptop: `pip install pyserial bleak`, then `python laptop/main.py` (Bluetooth; it finds the watch by the name `TinyKey`). Add `--usb` to use the cable instead. Turn the laptop's Bluetooth on first.
+- Laptop: `pip install pyserial bleak pynput`, then `python laptop/main.py` (Bluetooth; it finds the watch by the name `TinyKey`). Add `--usb` to use the cable instead. Turn the laptop's Bluetooth on first.
 - Several watches in one room: they all advertise as `TinyKey`, and a laptop connects to the first one it finds. Give yours its own name in both `watch/ble.ino` (`BLE_NAME`) and `laptop/link.py` (`WATCH_NAME`), e.g. `TinyKey2`, and don't commit that change.
 - Link test: `python laptop/echo_test.py` sends 100 random lines and checks they all come back. `--usb` tests the cable; `--reconnect 10` also drops the Bluetooth link 10 times and checks each reconnect takes under 5 s.
 - Disconnect test on battery: upload over USB, unplug the cable and switch the watch on.
@@ -77,15 +77,15 @@ Pairs B and C never touch USB or Bluetooth. Use only these:
 |---|---|---|
 | `RESP:<64 hex>` | B | Approved by double-tap. HMAC-SHA256 result. |
 | `RESP:REJECT` | B | No double-tap within 10 s. |
-| `CMD:NEXT` / `CMD:PREV` | C | Right / left arrow (slides). |
-| `CMD:PLAY` | C | Media play/pause. |
-| `CMD:VOLUP` / `CMD:VOLDN` | C | Media volume up / down (long press). |
+| `CMD:NEXT` / `CMD:PREV` | C | Right / left arrow (slides). Upper right / lower right, long press. |
+| `CMD:PLAY` | C | Media play/pause. Upper left, short press. |
+| `CMD:SKIP` | C | Media next track. Upper left, long press. |
+| `CMD:VOLUP` / `CMD:VOLDN` | C | Media volume up / down. Upper right / lower right, short press. |
 
 One button press sends exactly one message.
 
 ### Proposed, not agreed yet
 
-- `MODE:KEY` / `MODE:MEDIA` (watch to laptop): the watch switched modes.
 - `PING` (laptop) / `PONG` (watch) every second, so the laptop notices a lost watch within the 5 s lock target.
 
 ### HMAC
