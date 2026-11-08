@@ -1,21 +1,29 @@
-// signal.ino - TEST: shows the Bluetooth signal strength (RSSI) on screen once a second.
-// While testing it temporarily covers the word "MEDIA" in the middle of the screen.
+// signal.ino - Pair C extra feature: Bluetooth signal strength (RSSI).
+// Once a second the watch measures the signal and sends "RSSI:-72" to the laptop.
+// The laptop (proximity.py) locks the screen when the signal stays weak.
 
+const bool SIGNAL_SHOW_ON_SCREEN = true;  // TEST: also show the number in the middle of the screen
 unsigned long signalCheckedAt = 0;
 
 void signalLoop() {
   if (!bleConnected) return;                      // no Bluetooth connection: nothing to measure
-  if (millis() - signalCheckedAt < 1000) return;  // only once per second
+  if (millis() - signalCheckedAt < 1000) return;  // once per second
   signalCheckedAt = millis();
 
   uint16_t handle = bleConnHandle;  // a COPY of the connection ID (the function may change it)
   int8_t rssi = 0;
-  int status = hci_read_rssi(&handle, &rssi);  // ask the Bluetooth chip for the signal strength
+  if (hci_read_rssi(&handle, &rssi) != 0) return;  // no reading this time: try again next second
+  if (rssi == 127) return;                         // 127 means "not available"
 
-  char text[16];
-  if (status == 0) sprintf(text, "%d dBm", rssi);  // 0 = success, e.g. "-58 dBm"
-  else sprintf(text, "err %d", status);             // something went wrong: show the error code
-  display.clearWindow(20, 22, 56, 9);
-  display.setCursor((96 - display.getPrintWidth(text)) / 2, 22);
-  display.print(text);
+  char msg[12];
+  sprintf(msg, "RSSI:%d", rssi);  // e.g. "RSSI:-72"
+  sendLine(msg);                  // send it to the laptop
+
+  if (SIGNAL_SHOW_ON_SCREEN) {
+    char text[12];
+    sprintf(text, "%d dBm", rssi);
+    display.clearWindow(20, 22, 56, 9);
+    display.setCursor((96 - display.getPrintWidth(text)) / 2, 22);
+    display.print(text);
+  }
 }
