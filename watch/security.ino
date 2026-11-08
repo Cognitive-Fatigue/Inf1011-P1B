@@ -234,14 +234,36 @@ void secShowCount() {
   display.print(text);
 }
 
-// Called once for each double-tap. Week 2: approve the waiting challenge here.
+// ---------- Week 2 Approval State Variables ----------
+char pendingChal[128];
+bool waitingForApproval = false;
+unsigned long chalStartTime = 0;
+const unsigned long APPROVAL_TIMEOUT_MS = 10000; // 10 seconds
+
+// Status check required by Pair C for remote.ino
+bool securityIsApprovalActive() {
+  return waitingForApproval;
+}
+
+// Week 2: Triggered upon double-tap
 void secOnDoubleTap() {
   secDoubleTaps++;
   secDebug("DOUBLE TAP ", secDoubleTaps);
   secShowCount();
+
+  if (waitingForApproval) {
+    char resp[5 + 64 + 1];
+    if (secMakeResponse(pendingChal, resp)) {
+      sendLine(resp);  // Send HMAC signature upon approval
+    } else {
+      sendLine("RESP:REJECT");
+    }
+    waitingForApproval = false;
+    display.clearWindow(0, 0, 96, 64);
+    secShowCount();
+  }
 }
 
-// Feeds one sample; returns true when it completes a double-tap. now = millis() of the sample.
 bool secTapSample(const int *a, unsigned long now) {
   if (!secHavePrev) {
     memcpy(secPrev, a, sizeof(secPrev));
@@ -251,53 +273,65 @@ bool secTapSample(const int *a, unsigned long now) {
   int jerk = abs(a[0] - secPrev[0]) + abs(a[1] - secPrev[1]) + abs(a[2] - secPrev[2]);
   memcpy(secPrev, a, sizeof(secPrev));
 
-  bool wasStill = now - secLastBusyMs >= SEC_QUIET_BEFORE_MS;  // checked before this sample counts
+  bool wasStill = now - secLastBusyMs >= SEC_QUIET_BEFORE_MS;
   if (jerk >= SEC_QUIET_JERK) secLastBusyMs = now;
 
   if (secFirstTapMs && now - secFirstTapMs > SEC_MAX_GAP_MS) {
-    secFirstTapMs = 0;  // only one tap: start over
-    secDebugText("single tap only: second tap came too late");
+    secFirstTapMs = 0;
   }
   if (now < secDeadUntilMs || jerk < SEC_TAP_JERK) return false;
   secDeadUntilMs = now + SEC_DEAD_MS;
 
   if (!secFirstTapMs) {
-    if (!wasStill) {
-      secDebug("tap ignored, watch was moving: jerk ", jerk);
-      return false;
-    }
+    if (!wasStill) return false;
     secFirstTapMs = now;
-    secDebug("tap 1: jerk ", jerk);
     return false;
   }
   unsigned long gap = now - secFirstTapMs;
   secFirstTapMs = 0;
-  if (gap < SEC_MIN_GAP_MS) return false;  // can't happen while SEC_DEAD_MS >= SEC_MIN_GAP_MS
-  secDebug("tap 2: jerk ", jerk);
-  secDebug("gap between taps ms ", gap);
+  if (gap < SEC_MIN_GAP_MS) return false;
   return true;
 }
 
-// ---------- Hooks called by watch.ino ----------
 void securitySetup() {
   secAccelSetup();
 }
 
+// Week 2 Loop: Handle 10-second timeout
 void securityLoop() {
   if (!secAccelAddr) return;
   unsigned long now = millis();
+
+  // Check for timeout
+  if (waitingForApproval && (now - chalStartTime > APPROVAL_TIMEOUT_MS)) {
+    waitingForApproval = false;
+    sendLine("RESP:REJECT");  // Timeout rejection
+    display.clearWindow(0, 0, 96, 64);
+    secShowCount();
+  }
+
   if (now - secLastSampleMs < SEC_SAMPLE_MS) return;
-  if (now - secLastSampleMs > 4 * SEC_SAMPLE_MS) secHavePrev = false;  // loop was busy: don't compare across the gap
+  if (now - secLastSampleMs > 4 * SEC_SAMPLE_MS) secHavePrev = false;
   secLastSampleMs = now;
   int a[3];
   if (!secAccelRead(a)) { secHavePrev = false; return; }
   if (secTapSample(a, now)) secOnDoubleTap();
 }
 
-// Return true if this line was for you.
+// Week 2 OnLine: Prompt user with "Approve?" instead of answering instantly
 bool securityOnLine(const char *line) {
   if (strncmp(line, "CHAL:", 5) != 0) return false;
-  char resp[5 + 64 + 1];
-  if (secMakeResponse(line, resp)) sendLine(resp);  // Week 1: answer at once. Week 2: wait for a double-tap
-  return true;  // a malformed CHAL is still ours: ignored
+  
+  strncpy(pendingChal, line, sizeof(pendingChal) - 1);
+  pendingChal[sizeof(pendingChal) - 1] = '\0';
+  waitingForApproval = true;
+  chalStartTime = millis();
+
+  // Take over screen to prompt user
+  display.clearWindow(0, 0, 96, 64);
+  display.setCursor(20, 25);
+  display.print("Approve?");
+  secShowCount();
+
+  return true;
 }
