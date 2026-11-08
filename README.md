@@ -155,19 +155,6 @@ Signal measured in testing (watch on its own, no case):
 | 5 m | -88 to -90 dBm |
 | 7-8 m behind a wall | disconnected |
 
-### Setup for early lock (Pair A: `laptop/main.py`)
-
-Add these 3 lines so `RSSI:` messages reach `proximity.py`:
-
-```python
-import proximity
-```
-```python
-    for handler in (security.on_line, remote.on_line, proximity.on_line):
-```
-```python
-    proximity.setup(link.send_line)
-```
 
 ### Settings
 
@@ -193,6 +180,7 @@ import proximity
 4. Timer: hold NEXT and it starts counting. Press both right buttons and it disappears.
 5. Early lock: walk slowly to about 5 m and stand still. After about 4 s the terminal prints `Signal weak: locking laptop` and Windows locks.
 6. False-alarm check: sit at the laptop for 2-3 minutes using it normally. It should never lock.
+7. Laser Pointer Feature: Hold MODE + tilt = move mouse. Hold MODE + tap PLAY = circle highlight. Ctrl+L in slideshow shows red laser dot. 
 
 ### Known limitations
 

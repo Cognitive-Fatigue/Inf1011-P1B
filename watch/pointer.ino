@@ -8,6 +8,13 @@ const unsigned long POINTER_SEND_MS = 50;  // send 20 times a second
 uint8_t pointerAccelAddr = 0;              // 0 = no accelerometer found
 unsigned long pointerSentAt = 0;
 bool pointerWasOn = false;
+bool pointerCirclePrev = false;       // was the circle button down last time?
+unsigned long pointerCircleAt = 0;    // when we last sent CIRCLE (to ignore button bounce)
+
+// True while the pointer button (lower left) is held. remote.ino uses this to keep other buttons quiet.
+bool pointerHeld() {
+  return pointerAccelAddr && display.getButtons(TSButtonLowerLeft);
+}
 
 bool pointerAccelWrite(uint8_t reg, uint8_t value) {
   Wire.beginTransmission(pointerAccelAddr);
@@ -50,9 +57,17 @@ void pointerLoop() {
   if (!on) {
     if (pointerWasOn) sendLine("TILT:0,0");  // just released: tell the laptop to stop at once
     pointerWasOn = false;
+    pointerCirclePrev = false;
     return;
   }
   pointerWasOn = true;
+   // While pointing: tapping the upper-left button draws a circle around the dot.   ← circle code goes HERE
+  bool circleBtn = display.getButtons(TSButtonUpperLeft);
+  if (circleBtn && !pointerCirclePrev && millis() - pointerCircleAt > 1000) {
+    sendLine("CIRCLE");
+    pointerCircleAt = millis();
+  }
+  pointerCirclePrev = circleBtn;
   if (millis() - pointerSentAt < POINTER_SEND_MS) return;  // not time to send yet
   pointerSentAt = millis();
 

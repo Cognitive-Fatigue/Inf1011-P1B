@@ -46,7 +46,7 @@ RemoteButton remoteButtons[] = {
 
 // Week 2: false in Key mode (Pair A's mode check) and during approval (Pair B's approval check).
 bool remoteActive() {
-  return true;
+ return !pointerHeld();  // TEST: while pointing, other buttons don't send their normal commands
 }
 
 void remoteLabel(const char *text, uint8_t y, bool right) {
