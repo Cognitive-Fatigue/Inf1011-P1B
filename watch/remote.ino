@@ -9,6 +9,7 @@ bool remoteFeedbackShown = false;
 // Sends a command AND shows its name at the bottom middle, so the user sees the press worked.
 void remoteSend(const char *cmd) {
   sendLine(cmd);
+  if (strcmp(cmd, "CMD:NEXT") == 0) timerStart();  // 3a: first NEXT starts the timer
   const char *name = cmd + 4;  // skip the "CMD:" part, e.g. "CMD:NEXT" -> "NEXT"
   display.clearWindow(28, 44, 40, 10);  // wipe the feedback box (x, y, width, height)
   display.setCursor((96 - display.getPrintWidth((char *)name)) / 2, 44);  // centre the word
@@ -55,6 +56,8 @@ void remoteLabel(const char *text, uint8_t y, bool right) {
 
 // Each corner shows the short press, then the long press under it. Pair A calls this when redrawing in Media mode.
 void remoteDrawLabels() {
+  batteryRedraw();   // labels are being redrawn, so redraw the battery % too
+  timerRedraw();
   remoteLabel("PLAY", 0, false);
   remoteLabel("SKIP", 10, false);
   remoteLabel("VOL+", 0, true);
@@ -108,7 +111,18 @@ void remoteLoop() {
       b.handled = true;
     }
   }
+
+  // New: hold VOL+ and VOL- together to reset the presentation timer 
+  RemoteButton &up = remoteButtons[1];  // upper right (VOL+ / NEXT)
+  RemoteButton &dn = remoteButtons[2];  // lower right (VOL- / BACK)
+  if (up.down && dn.down && !(up.handled && dn.handled)) {
+    up.handled = true;  // so neither button ALSO sends its own command
+    dn.handled = true;
+    timerReset();
+  }
   remoteFeedbackLoop();
+  batteryLoop();     // NEW
+  timerLoop();       // 3c: update the timer every loop
 }
 
 // Return true if this line was for you.
