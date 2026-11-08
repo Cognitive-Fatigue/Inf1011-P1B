@@ -84,6 +84,7 @@ void remoteTestScreen() {
 
 void remoteSetup() {
   remoteTestScreen();
+  pointerSetup();    // NEW (test): laser pointer
 }
 
 void remoteLoop() {
@@ -124,6 +125,7 @@ void remoteLoop() {
   batteryLoop();     // NEW
   timerLoop();       // 3c: update the timer every loop
   signalLoop();      // TEST: show signal strength
+  pointerLoop();     // NEW (test): laser pointer
 }
 
 // Return true if this line was for you.
