@@ -2,6 +2,28 @@
 
 const unsigned long REMOTE_DEBOUNCE_MS = 30;  // a level must hold this long to count, so bounces are ignored
 const unsigned long REMOTE_LONG_MS = 600;  // held this long: send the long command once, nothing on release
+const unsigned long REMOTE_FEEDBACK_MS = 700;  // how long the confirmation stays on screen
+unsigned long remoteFeedbackAt = 0;
+bool remoteFeedbackShown = false;
+
+// Sends a command AND shows its name at the bottom middle, so the user sees the press worked.
+void remoteSend(const char *cmd) {
+  sendLine(cmd);
+  const char *name = cmd + 4;  // skip the "CMD:" part, e.g. "CMD:NEXT" -> "NEXT"
+  display.clearWindow(28, 44, 40, 10);  // wipe the feedback box (x, y, width, height)
+  display.setCursor((96 - display.getPrintWidth((char *)name)) / 2, 44);  // centre the word
+  display.print(name);
+  remoteFeedbackAt = millis();  // remember when we showed it
+  remoteFeedbackShown = true;
+}
+
+// Wipes the feedback once 0.7 s have passed.
+void remoteFeedbackLoop() {
+  if (remoteFeedbackShown && millis() - remoteFeedbackAt >= REMOTE_FEEDBACK_MS) {
+    display.clearWindow(28, 44, 40, 10);
+    remoteFeedbackShown = false;
+  }
+}
 
 struct RemoteButton {
   uint8_t mask;
@@ -77,15 +99,16 @@ void remoteLoop() {
         b.downAt = now;
         b.handled = false;
       } else if (!b.handled && remoteActive()) {
-        sendLine(b.shortCmd);
+        remoteSend(b.shortCmd);
       }
     }
     if (!remoteActive()) b.handled = true;  // a press that overlaps Key mode or approval sends nothing
     if (b.down && !b.handled && now - b.downAt >= REMOTE_LONG_MS) {
-      sendLine(b.longCmd);
+      remoteSend(b.longCmd);
       b.handled = true;
     }
   }
+  remoteFeedbackLoop();
 }
 
 // Return true if this line was for you.
