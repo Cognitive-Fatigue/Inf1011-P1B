@@ -123,6 +123,7 @@ void remoteLoop() {
   remoteFeedbackLoop();
   batteryLoop();     // NEW
   timerLoop();       // 3c: update the timer every loop
+  signalLoop();      // TEST: show signal strength
 }
 
 // Return true if this line was for you.
