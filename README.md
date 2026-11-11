@@ -33,7 +33,7 @@ Pairs B and C never touch USB or Bluetooth. Use only these:
 
 ## Running
 
-- Get the code: `git clone -b pair-a https://github.com/SITRio-Sch/tinykey.git`, then `cd tinykey`.
+- Get the code: `git clone -b Pair-A https://github.com/Cognitive-Fatigue/Inf1011-P1B.git`, then `cd Inf1011-P1B`.
 - Watch: open `watch/watch.ino` in the Arduino IDE (the other tabs load with it), board "TinyScreen+", upload. Needs the STBLE library and the BLE TinyShield on the stack.
 - STBLE fix (do this once): the installed library's `src/arduino_bluenrg_ble.cpp` has empty functions, so Bluetooth never starts. Copy `stble-patch/arduino_bluenrg_ble.cpp` over it (library folder: Arduino `libraries/STBLE/src/`), then rebuild. Without it, the watch still compiles and USB works, but no Bluetooth.
 - Later startup: run `python laptop/main.py` for BLE or `python laptop/main.py --usb` for USB. The watch must have the updated firmware uploaded; older firmware does not answer the ID query.
