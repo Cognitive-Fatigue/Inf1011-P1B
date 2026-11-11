@@ -1,31 +1,22 @@
-# Installation and setup
-Follow the tutorials below to install the required libraries  
-https://learn.tinycircuits.com/Processors/TinyScreen+_Setup_Tutorial/#downloads  
-https://learn.tinycircuits.com/Communication/Bluetooth-Low-Energy_TinyShield_Tutorial/  
+# Installation
+Install Python and follow the [TinyScreen+ setup tutorial](https://learn.tinycircuits.com/Processors/TinyScreen+_Setup_Tutorial/#downloads) and [BLE TinyShield tutorial](https://learn.tinycircuits.com/Communication/Bluetooth-Low-Energy_TinyShield_Tutorial/). The one-command setup installs the laptop's Python dependencies.
 
-On laptop:
-- `pip install pyserial bleak`
-- `git clone -b Pair-A https://github.com/Cognitive-Fatigue/Inf1011-P1B.git`
-- STBLE fix (do this once): the installed library's `src/arduino_bluenrg_ble.cpp` has empty functions, so Bluetooth never starts. Copy `stble-patch/arduino_bluenrg_ble.cpp` from INF1011-P1B over it, then rebuild. Without it, the watch still compiles and USB works, but no Bluetooth.
-
-To run:
-`python main.py` on laptop  
-In arduino IDE, top left corner: file -> open -> Inf1011-P1B -> watch -> watch.ino  
-Set Tools -> Board -> TinyCircuit SAMD Board -> Tinyscreen+  
-Set Tools -> port -> port that you have inserted your tinycircuit to  
-Upload code into tinycircuit via USB cable  
-
-
-Verify that tinycircuit is running:
-tinycircuit displays: `TinyKey On`
-Laptop prints `Watch connected on ...`
-Turn on and off the tinycircuit to verify that the bluetooth connection is working as it should
+The installed STBLE library's `src/arduino_bluenrg_ble.cpp` has empty functions, so Bluetooth needs the included patch. Copy `stble-patch/arduino_bluenrg_ble.cpp` over the installed `Arduino/libraries/STBLE/src/arduino_bluenrg_ble.cpp`, then rebuild. Without it, USB works but BLE does not.
 
 
 # TinyKey
 
 The TinyScreen+ watch works as a security key and a remote for the laptop.
-Watch (Arduino) <-- USB now, Bluetooth later --> Laptop (Python)
+Watch (Arduino) <-- USB or Bluetooth --> Laptop (Python)
+
+## One-command setup
+
+Prerequisites: install Python, upload the updated watch firmware, and connect exactly one watch by USB. Stop any existing TinyKey controller before rerunning setup.
+
+- `python setup.py` installs dependencies, enrolls the USB watch, and starts the BLE controller.
+- `python setup.py --usb` installs dependencies, enrolls the USB watch, and starts the USB controller.
+
+Setup can also be invoked by absolute path from another working directory.
 
 ## Who works where
 
@@ -42,11 +33,11 @@ Pairs B and C never touch USB or Bluetooth. Use only these:
 
 ## Running
 
-- Get the code: `git clone -b Pair-A https://github.com/Cognitive-Fatigue/Inf1011-P1B.git`, then `cd Inf1011-P1B`. Run every `python laptop/...` command below from this folder (not from where the terminal opens, e.g. `C:\WINDOWS\system32`).
+- Get the code: `git clone -b pair-a https://github.com/SITRio-Sch/tinykey.git`, then `cd tinykey`.
 - Watch: open `watch/watch.ino` in the Arduino IDE (the other tabs load with it), board "TinyScreen+", upload. Needs the STBLE library and the BLE TinyShield on the stack.
 - STBLE fix (do this once): the installed library's `src/arduino_bluenrg_ble.cpp` has empty functions, so Bluetooth never starts. Copy `stble-patch/arduino_bluenrg_ble.cpp` over it (library folder: Arduino `libraries/STBLE/src/`), then rebuild. Without it, the watch still compiles and USB works, but no Bluetooth.
-- Laptop: `pip install pyserial bleak`, then `python laptop/main.py` (Bluetooth; it finds the watch by the name `TinyKey`). Add `--usb` to use the cable instead. Turn the laptop's Bluetooth on first.
-- Several watches in one room: they all advertise as `TinyKey`, and a laptop connects to the first one it finds. Give yours its own name in both `watch/ble.ino` (`BLE_NAME`) and `laptop/link.py` (`WATCH_NAME`), e.g. `TinyKey2`, and don't commit that change.
+- Later startup: run `python laptop/main.py` for BLE or `python laptop/main.py --usb` for USB. The watch must have the updated firmware uploaded; older firmware does not answer the ID query.
+- USB being connected does not switch a running controller from BLE to USB. The watch's USB/BLE status reports detected links and does not prove which transport the controller selected. Each laptop saves its own watch ID; two laptops enrolled to the same watch can still compete for its connection. Matching is identity selection, not authentication or exclusive ownership.
 - Link test: `python laptop/echo_test.py` sends 100 random lines and checks they all come back. `--usb` tests the cable; `--reconnect 10` also drops the Bluetooth link 10 times and checks each reconnect takes under 5 s.
 - Disconnect test on battery: upload over USB, unplug the cable and switch the watch on.
   - `python laptop/echo_test.py 20 --reconnect 10`: the watch drops the link itself. Each reconnect prints its time (e.g. `reconnect 3: 2.2 s`, `FAIL` if 5 s or more), then `10/10 reconnects under 5 s` if all passed.
@@ -69,6 +60,7 @@ Pairs B and C never touch USB or Bluetooth. Use only these:
 | Message | Sent by | Meaning |
 |---|---|---|
 | `CHAL:<32 hex>:VAULT` | B | "Approve opening the vault?" The hex is a random 16-byte challenge. |
+| `SYNC` | A | Request the watch's current mode after each connection. |
 | `ECHO:<text>` | A | Link test. The watch sends the same line back. |
 
 ### Watch to laptop
@@ -80,13 +72,12 @@ Pairs B and C never touch USB or Bluetooth. Use only these:
 | `CMD:NEXT` / `CMD:PREV` | C | Right / left arrow (slides). |
 | `CMD:PLAY` | C | Media play/pause. |
 | `CMD:VOLUP` / `CMD:VOLDN` | C | Media volume up / down (long press). |
+| `MODE:KEY` / `MODE:MEDIA` | A | Current mode; the laptop authorizes remote commands after this reply. |
 
 One button press sends exactly one message.
 
-### Proposed, not agreed yet
-
-- `MODE:KEY` / `MODE:MEDIA` (watch to laptop): the watch switched modes.
-- `PING` (laptop) / `PONG` (watch) every second, so the laptop notices a lost watch within the 5 s lock target.
+The lower-left button toggles Key/Media. Remote commands are accepted only in Media mode;
+the laptop locks its Windows session after a connected watch disconnects.
 
 ### HMAC
 
