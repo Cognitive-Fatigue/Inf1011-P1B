@@ -43,8 +43,7 @@ void pointerSetup() {
     if (Wire.endTransmission() == 0) pointerAccelAddr = addrs[i];
   }
   if (!pointerAccelAddr) {
-    display.setCursor((96 - display.getPrintWidth((char *)"NO ACCEL")) / 2, 44);
-    display.print("NO ACCEL");  // no accelerometer board on the stack
+    uiNoAccelerometer();  // no accelerometer board on the stack: the boot screen says so
     return;
   }
   pointerAccelWrite(0x0F, 0x05);  // range +-4 g: 128 counts = 1 g (same setting as Pair B)

@@ -2,7 +2,6 @@
 // Once a second the watch measures the signal and sends "RSSI:-72" to the laptop.
 // The laptop (proximity.py) locks the screen when the signal stays weak.
 
-const bool SIGNAL_SHOW_ON_SCREEN = true;  // TEST: also show the number in the middle of the screen
 unsigned long signalCheckedAt = 0;
 
 void signalLoop() {
@@ -18,12 +17,5 @@ void signalLoop() {
   char msg[12];
   sprintf(msg, "RSSI:%d", rssi);  // e.g. "RSSI:-72"
   sendLine(msg);                  // send it to the laptop
-
-  if (SIGNAL_SHOW_ON_SCREEN) {
-    char text[12];
-    sprintf(text, "%d dBm", rssi);
-    display.clearWindow(20, 22, 56, 9);
-    display.setCursor((96 - display.getPrintWidth(text)) / 2, 22);
-    display.print(text);
-  }
+  uiSetSignal(rssi);              // signal bars at the top of the screen
 }

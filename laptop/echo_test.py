@@ -17,7 +17,9 @@ from link import BleLink, UsbLink
 async def main(args):
     received = asyncio.Queue()
     connected = asyncio.Event()
-    link = (UsbLink if args.usb else BleLink)(received.put_nowait, lambda where: connected.set())
+    # only ECHO lines: the watch also sends RSSI (and other) lines that would shift every comparison
+    link = (UsbLink if args.usb else BleLink)(
+        lambda line: received.put_nowait(line) if line.startswith("ECHO:") else None, lambda where: connected.set())
     reader = asyncio.create_task(link.run())
     await asyncio.wait_for(connected.wait(), 20)
 

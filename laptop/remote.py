@@ -1,4 +1,6 @@
-"""Pair C: turn CMD lines into key presses (pynput)."""
+"""Pair C: turn CMD lines into key presses (pynput), and answer the watch's TIME? with the time."""
+import time
+
 from pynput.keyboard import Controller, Key
 
 send_line = None
@@ -21,6 +23,9 @@ def setup(send):
 
 def on_line(line):
     """Return True if this line was for you."""
+    if line == "TIME?":  # the watch asks for the time to show its clock
+        send_line(time.strftime("TIME:%H:%M:%S"))
+        return True
     key = KEYS.get(line)
     if key is None:
         return False
