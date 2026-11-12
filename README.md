@@ -94,3 +94,98 @@ One button press sends exactly one message.
 - Input: the 16 raw challenge bytes (not the hex text), then the ASCII bytes of the action, e.g. `VAULT`.
 - Output: HMAC-SHA256, sent as 64 lowercase hex characters.
 - Python reference: `hmac.new(key, challenge + b"VAULT", hashlib.sha256).hexdigest()`
+
+
+## Pair C – remote and extra features
+
+### Buttons (Media mode)
+
+Each label on screen sits next to the button it belongs to. **Tap** = short press, **hold** = about 0.6 s.
+
+| Button | Tap | Hold |
+|---|---|---|
+| Upper left | `PLAY` play/pause | `SKIP` next track |
+| Upper right | `VOL+` volume up | `NEXT` next slide |
+| Lower right | `VOL-` volume down | `BACK` previous slide |
+| Lower left | `MODE` (Pair A's mode switch) | – |
+| **Upper right + lower right together** | Reset the presentation timer | – |
+
+One press sends exactly one message. Holding sends the long command once (nothing extra on release).
+
+### Screen layout
+
+```
+PLAY        87%        VOL+    ← battery %
+SKIP       03:25       NEXT    ← presentation timer
+          (status)             ← Pair A's area
+           [NEXT]      VOL-    ← press feedback
+MODE                   BACK
+```
+
+### Extra features
+
+**Press feedback** (`watch/remote.ino`)
+After each command, its name (e.g. `NEXT`, `VOLUP`) shows at the bottom middle for 0.7 s, so you can see the press worked.
+
+**Battery %** (`watch/battery.ino`)
+Shows the battery level at the top middle, measured every 10 s from the battery voltage (4.2 V = 100%, 3.5 V = 0%).
+- On USB it shows about 100% because the cable is charging the battery.
+- It is an estimate, not exact.
+
+**Presentation timer** (`watch/timer.ino`)
+Starts at the first `NEXT` and shows minutes:seconds. Later `NEXT` presses don't restart it.
+- **Reset:** press the two right buttons (VOL+ and VOL-) together. The timer disappears and the next `NEXT` starts it from 00:00. Neither button sends its own command during the reset.
+- It also resets when the watch is switched off.
+
+**Early lock when you walk away** (`watch/signal.ino` + `laptop/proximity.py`)
+Locks the laptop when the Bluetooth signal stays weak, before the link fully drops.
+- Once a second, the watch measures the signal strength (RSSI) and sends `RSSI:-72`.
+- The laptop averages the last 4 readings. If the average is weaker than **-85 dBm** (about 4-5 m), it locks Windows once (same as Windows + L).
+- It only locks again after the signal has been strong again (better than -70 dBm, i.e. you came back).
+- Bluetooth only: there is no signal reading over USB.
+- Unlocking is always done by Windows (PIN/password). The watch can lock but never unlock.
+
+Signal measured in testing (watch on its own, no case):
+
+| Distance | Signal |
+|---|---|
+| Next to laptop | -35 to -37 dBm |
+| 1 m | -50 to -55 dBm |
+| 2 m | -70 to -73 dBm |
+| 5 m | -88 to -90 dBm |
+| 7-8 m behind a wall | disconnected |
+
+
+### Settings
+
+| File | Setting | Default | Meaning |
+|---|---|---|---|
+| `laptop/proximity.py` | `ENABLED` | `True` | `False` turns early lock off (e.g. if it misbehaves on demo day) |
+| `laptop/proximity.py` | `LOCK_BELOW` | `-85` | Lock when the average is weaker than this. Locks too easily: try `-88`. Too slow: try `-80` |
+| `laptop/proximity.py` | `ARM_ABOVE` | `-70` | Ready to lock again once the average is stronger than this |
+| `laptop/proximity.py` | `SAMPLES` | `4` | How many readings (seconds) to average |
+| `watch/signal.ino` | `SIGNAL_SHOW_ON_SCREEN` | `false` | `true` shows the live dBm number in the middle of the screen (testing only) |
+
+### New message
+
+| Message | Direction | Meaning |
+|---|---|---|
+| `RSSI:<number>` | watch to laptop | Bluetooth signal strength in dBm, once a second, e.g. `RSSI:-72` |
+
+### How to test
+
+1. Upload `watch/watch.ino` with the USB cable, then unplug it.
+2. Run `python laptop/main.py` (Bluetooth). It prints `signal -38 dBm, average -37` every second.
+3. Buttons: tap and hold each one in PowerPoint (F5) and a music player. The command name should flash at the bottom of the screen.
+4. Timer: hold NEXT and it starts counting. Press both right buttons and it disappears.
+5. Early lock: walk slowly to about 5 m and stand still. After about 4 s the terminal prints `Signal weak: locking laptop` and Windows locks.
+6. False-alarm check: sit at the laptop for 2-3 minutes using it normally. It should never lock.
+7. Laser Pointer Feature: Hold MODE + tilt = move mouse. Hold MODE + tap PLAY = circle highlight. Ctrl+L in slideshow shows red laser dot. 
+
+### Known limitations
+
+- **Walking away fast** can take you out of range (about 7 m) before the 4-second average reacts. That case is covered by Pair A's lock on disconnect.
+- **The 3D-printed case or your body** can weaken the signal. Re-check the numbers above with the watch in its case and adjust `LOCK_BELOW` if needed.
+- **Battery %** is an estimate and shows about 100% while charging.
+- **The timer reset combo** isn't shown on screen (no space), so mention it in the demo.
+- **`remoteActive()`** still always returns `true`. It needs Pair A's `isMediaMode()` and Pair B's `isApprovalActive()` so the buttons stay silent in Key mode and during approval.
