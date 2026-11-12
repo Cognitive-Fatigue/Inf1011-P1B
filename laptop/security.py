@@ -2,11 +2,15 @@
 
 Week 1: request_approval() sends a fresh challenge; the watch answers at once and on_line()
 checks the answer. Test: python laptop/security_test.py --usb
-Week 2: the watch answers only after a double-tap; open the vault window when approved.
+Week 2: the watch answers only after a double-tap. vault.py's "Open vault" button sends the
+challenge, and the vault window opens only for an approved reply. Replay test: python laptop/replay_test.py
 """
+import asyncio
 import hashlib
 import hmac
 import secrets
+
+import vault
 
 # Must be byte-for-byte the same as SEC_KEY in watch/security.ino.
 # Hardcoded on both sides: a known limitation, stated in the video.
@@ -20,6 +24,24 @@ pending = None  # the challenge we are waiting on; each one is used once, so a r
 def setup(send):
     global send_line
     send_line = send
+    try:
+        loop = asyncio.get_running_loop()  # main.py's link loop
+    except RuntimeError:
+        return  # not inside main.py (e.g. the self-test below): no window
+    vault.start(lambda: ask_from_window(loop))
+
+
+def ask_from_window(loop):
+    """Called from the vault window's thread: send the challenge on the link's loop and wait for it."""
+    future = asyncio.run_coroutine_threadsafe(_request(), loop)
+    try:
+        return future.result(2)
+    except Exception:
+        return False
+
+
+async def _request():
+    return request_approval() is not None
 
 
 def expected_hex(challenge, action=ACTION):
@@ -56,7 +78,8 @@ def on_line(line):
     if not line.startswith("RESP:"):
         return False
     result = check_resp(line)
-    print(f"Vault request: {result}")  # Week 2: open the vault window when approved
+    print(f"Vault request: {result}")
+    vault.show_result(result)  # opens the vault window only when approved
     return True
 
 

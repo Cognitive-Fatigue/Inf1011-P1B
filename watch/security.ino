@@ -3,8 +3,8 @@
 // Week 1 (this file now):
 //   - CHAL:<32 hex>:VAULT is answered at once with RESP:<64 hex> (HMAC-SHA256), so the laptop
 //     can check both sides compute the same value. Test: python laptop/security_test.py --usb
-//   - Double-tap detection on the accelerometer. Each detected double-tap shows a count on the
-//     screen and, with the USB cable in, prints DBG lines (open the Serial Monitor at 115200).
+//   - Double-tap detection on the accelerometer. With the USB cable in, each detected double-tap
+//     prints DBG lines (open the Serial Monitor at 115200).
 // Week 2: answer CHAL only after a double-tap ("Approve?" on screen), or RESP:REJECT after 10 s.
 //
 // No extra library needed: SHA-256 and HMAC are written out below, and the accelerometer
@@ -23,7 +23,7 @@ const uint8_t SEC_KEY[32] = {
 // "Jerk" is how much the reading changed since the last sample (5 ms ago), summed over x, y, z.
 // A tap is a sharp jolt (big jerk); swinging your arm changes the reading slowly (small jerk).
 const bool SEC_DEBUG = true;               // print DBG lines over USB while tuning; false when done
-const int SEC_TAP_JERK = 80;               // jerk at or above this is a tap (about 0.6 g in 5 ms)
+const int SEC_TAP_JERK = 60;               // jerk at or above this is a tap (about 0.5 g in 5 ms); 80 missed taps through the case
 const int SEC_QUIET_JERK = 20;             // jerk below this counts as "watch is still"
 const unsigned long SEC_QUIET_BEFORE_MS = 150;  // watch must be still this long before the first tap
 const unsigned long SEC_DEAD_MS = 60;      // ignore the ringing for this long after a tap
@@ -226,14 +226,6 @@ unsigned long secDeadUntilMs = 0;    // ignoring ringing until then
 unsigned long secFirstTapMs = 0;     // 0: waiting for a first tap
 unsigned long secDoubleTaps = 0;
 
-void secShowCount() {
-  char text[16];
-  snprintf(text, sizeof(text), "TAPx2: %lu", secDoubleTaps);
-  display.clearWindow(24, 44, 48, 10);  // between Pair C's corner labels
-  display.setCursor((96 - display.getPrintWidth(text)) / 2, 44);
-  display.print(text);
-}
-
 // ---------- Week 2 Approval State Variables ----------
 char pendingChal[128];
 bool waitingForApproval = false;
@@ -249,18 +241,17 @@ bool securityIsApprovalActive() {
 void secOnDoubleTap() {
   secDoubleTaps++;
   secDebug("DOUBLE TAP ", secDoubleTaps);
-  secShowCount();
 
   if (waitingForApproval) {
     char resp[5 + 64 + 1];
-    if (secMakeResponse(pendingChal, resp)) {
+    bool ok = secMakeResponse(pendingChal, resp);
+    if (ok) {
       sendLine(resp);  // Send HMAC signature upon approval
     } else {
       sendLine("RESP:REJECT");
     }
     waitingForApproval = false;
-    display.clearWindow(0, 0, 96, 64);
-    secShowCount();
+    uiShowResult(ok);  // OPEN or DENIED, then back to the previous screen
   }
 }
 
@@ -299,16 +290,16 @@ void securitySetup() {
 
 // Week 2 Loop: Handle 10-second timeout
 void securityLoop() {
-  if (!secAccelAddr) return;
   unsigned long now = millis();
 
-  // Check for timeout
+  // Check for timeout (before the accelerometer check, so a watch without one still rejects)
   if (waitingForApproval && (now - chalStartTime > APPROVAL_TIMEOUT_MS)) {
     waitingForApproval = false;
     sendLine("RESP:REJECT");  // Timeout rejection
-    display.clearWindow(0, 0, 96, 64);
-    secShowCount();
+    uiShowResult(false);
   }
+
+  if (!secAccelAddr) return;
 
   if (now - secLastSampleMs < SEC_SAMPLE_MS) return;
   if (now - secLastSampleMs > 4 * SEC_SAMPLE_MS) secHavePrev = false;
@@ -327,11 +318,7 @@ bool securityOnLine(const char *line) {
   waitingForApproval = true;
   chalStartTime = millis();
 
-  // Take over screen to prompt user
-  display.clearWindow(0, 0, 96, 64);
-  display.setCursor(20, 25);
-  display.print("Approve?");
-  secShowCount();
+  uiShowApproval();  // "Approve?" with a 10 s countdown bar
 
   return true;
 }

@@ -5,6 +5,8 @@ weaker than LOCK_BELOW, the laptop locks once. It can only lock again after the 
 has been strong again (you came back).
 """
 import ctypes
+import subprocess
+import sys
 
 ENABLED = True     # set to False to switch this feature off (e.g. if it misbehaves on demo day)
 LOCK_BELOW = -85   # dBm: average weaker than this = walked away (about 4-5 m in our test)
@@ -22,7 +24,16 @@ def setup(send):
 
 
 def lock_laptop():
-    ctypes.windll.user32.LockWorkStation()  # the same as pressing Windows + L
+    """Locks the screen. Never raises: a failed lock must not stop the link to the watch."""
+    try:
+        if sys.platform == "win32":
+            ctypes.windll.user32.LockWorkStation()  # the same as pressing Windows + L
+        elif sys.platform == "darwin":
+            subprocess.run(["pmset", "displaysleepnow"], check=False)  # locks if a password is required after sleep
+        else:
+            subprocess.run(["loginctl", "lock-session"], check=False)  # Linux desktops (GNOME, Zorin, KDE)
+    except Exception as e:
+        print(f"Could not lock the laptop: {e}")
 
 
 def on_line(line):

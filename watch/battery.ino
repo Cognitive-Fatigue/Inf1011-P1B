@@ -1,4 +1,4 @@
-// battery.ino - shows the watch battery % at the top middle of the screen (Pair C extra feature).
+// battery.ino - measures the watch battery % for the top of the screen (Pair C extra feature).
 // The voltage-reading code is based on TinyCircuits' TinyScreen+ example code.
 
 const unsigned long BATTERY_CHECK_MS = 10000;  // re-measure every 10 s (a battery changes slowly)
@@ -45,12 +45,6 @@ int batteryPercent(float volts) {
   return pct;
 }
 
-// Call after the screen was wiped, so the % gets drawn again.
-void batteryRedraw() {
-  batteryShown = -1;
-  batteryForce = true;
-}
-
 // Call every loop. Measures every 10 s and only redraws when the number changed.
 void batteryLoop() {
   unsigned long now = millis();
@@ -61,10 +55,5 @@ void batteryLoop() {
   int pct = batteryPercent(batteryGetVoltage());
   if (pct == batteryShown) return;  // same as before: no need to redraw
   batteryShown = pct;
-
-  char text[6];
-  sprintf(text, "%d%%", pct);           // e.g. "87%"  (%% prints a real % sign)
-  display.clearWindow(34, 0, 28, 9);    // wipe the old number (x, y, width, height)
-  display.setCursor((96 - display.getPrintWidth(text)) / 2, 0);  // centre it at the top
-  display.print(text);
+  uiSetBattery(pct);  // ui.ino draws the battery icon and %
 }

@@ -70,6 +70,7 @@ Pairs B and C never touch USB or Bluetooth. Use only these:
 |---|---|---|
 | `CHAL:<32 hex>:VAULT` | B | "Approve opening the vault?" The hex is a random 16-byte challenge. |
 | `ECHO:<text>` | A | Link test. The watch sends the same line back. |
+| `TIME:<hh:mm:ss>` | C | The laptop's local time, in reply to `TIME?`. Sets the watch's clock. |
 
 ### Watch to laptop
 
@@ -81,6 +82,7 @@ Pairs B and C never touch USB or Bluetooth. Use only these:
 | `CMD:PLAY` | C | Media play/pause. Upper left, short press. |
 | `CMD:SKIP` | C | Media next track. Upper left, long press. |
 | `CMD:VOLUP` / `CMD:VOLDN` | C | Media volume up / down. Upper right / lower right, short press. |
+| `TIME?` | C | Asks the laptop for the time (every 5 s until answered, then hourly). |
 
 One button press sends exactly one message.
 

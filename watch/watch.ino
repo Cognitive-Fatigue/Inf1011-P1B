@@ -64,14 +64,16 @@ void setup() {
   // --- DISPLAY INITIALIZATION ---
   display.setFont(thinPixel7_10ptFontInfo);          // Uses authentic TinyScreen library font configuration
   display.fontColor(TS_8b_White, TS_8b_Black);       // White text on a Black background
-  display.clearWindow(0, 0, 96, 64);                 // Wipes the screen clear (96x64 resolution)
-  display.setCursor(20, 25);                         // Sets layout cursor position near screen center
-  display.print("TinyKey ON");                       // Text displayed at boot
+  uiBoot();                                          // boot screen (ui.ino draws every screen)
   // ------------------------------
 
   bleSetup();
+  uiBootStep(1, 3);
   securitySetup();
+  uiBootStep(2, 3);
   remoteSetup();
+  uiBootStep(3, 3);
+  uiBootDone();
 }
 
 void loop() {
@@ -79,4 +81,5 @@ void loop() {
   bleLoop();
   securityLoop();
   remoteLoop();
+  uiLoop();
 }
