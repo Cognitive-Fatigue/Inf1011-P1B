@@ -7,7 +7,6 @@ In a PowerPoint slideshow, press Ctrl+L to show the pointer as a red laser dot.
 import threading
 import time
 import math
-from pynput.mouse import Controller
 
 # ---- Settings you can tune (no watch upload needed) ----
 DEAD_ZONE = 10      # tilt smaller than this does nothing (about 7 degrees), so no drifting
@@ -19,8 +18,9 @@ TIMEOUT = 0.3       # stop moving if no TILT message arrives for this long (seco
 CIRCLE_RADIUS = 160  # circle size in pixels
 CIRCLE_TIME = 1.2   # seconds to draw one circle
 
-mouse = Controller()
+mouse = None       # pynput's mouse Controller, created in setup()
 send_line = None
+is_active = lambda: True  # main.py passes its check: Media mode, synced, no approval pending
 speed = [0.0, 0.0]  # current speed in pixels per second (x, y)
 last_msg = 0.0
 lock = threading.Lock()
@@ -69,9 +69,12 @@ def draw_circle():
     circling = False
 
 
-def setup(send):
-    global send_line
+def setup(send, active=None):
+    global send_line, mouse, is_active
+    from pynput.mouse import Controller
     send_line = send
+    mouse = Controller()
+    is_active = active or (lambda: True)
     threading.Thread(target=mover, daemon=True).start()
 
 
@@ -80,12 +83,14 @@ def on_line(line):
     global last_msg
 
     if line == "CIRCLE":
-        if not circling:
+        if not circling and is_active():
             threading.Thread(target=draw_circle, daemon=True).start()
         return True
     
     if not line.startswith("TILT:"):
         return False
+    if not is_active():
+        return True  # ours, but not in Media mode or during approval: ignore it
     try:
         x, y = (int(v) for v in line[5:].split(","))
     except ValueError:

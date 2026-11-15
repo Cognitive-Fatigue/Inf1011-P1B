@@ -127,6 +127,8 @@ const int SEC_MAX_ACTION = 16;
 // ASCII bytes. Returns the input length, or 0 if the line is malformed.
 size_t secParseChallenge(const char *line, uint8_t *msg) {  // msg holds 16 + SEC_MAX_ACTION bytes
   if (strncmp(line, "CHAL:", 5) != 0) return 0;
+  size_t lineLen = strlen(line);
+  if (lineLen < 39 || line[37] != ':') return 0;  // CHAL: + 32 hex + : + at least one action letter
   const char *hex = line + 5;
   for (int i = 0; i < 16; i++) {
     int hi = secHexValue(hex[2 * i]), lo = secHexValue(hex[2 * i + 1]);  // stops at a short line's 0
@@ -165,14 +167,14 @@ uint8_t secAccelAddr = 0;  // 0: no accelerometer found
 
 // Debug lines go over USB only, never Bluetooth. The laptop program ignores them (unknown type).
 void secDebugText(const char *text) {
-  if (!SEC_DEBUG || !SerialUSB) return;
+  if (!SEC_DEBUG || !appUsbActive()) return;  // `if (SerialUSB)` waits 10 ms and stays true after unplugging
   SerialUSB.print("DBG:");
   SerialUSB.print(text);
   SerialUSB.print('\n');
 }
 
 void secDebug(const char *text, long value) {
-  if (!SEC_DEBUG || !SerialUSB) return;
+  if (!SEC_DEBUG || !appUsbActive()) return;  // `if (SerialUSB)` waits 10 ms and stays true after unplugging
   SerialUSB.print("DBG:");
   SerialUSB.print(text);
   SerialUSB.print(value);
@@ -237,6 +239,14 @@ bool securityIsApprovalActive() {
   return waitingForApproval;
 }
 
+// Pair A calls this when the laptop link is lost: drop the request quietly and go back home.
+void securityCancelApproval() {
+  if (!waitingForApproval) return;
+  waitingForApproval = false;
+  pendingChal[0] = '\0';
+  uiShowHome();
+}
+
 // Week 2: Triggered upon double-tap
 void secOnDoubleTap() {
   secDoubleTaps++;
@@ -251,6 +261,7 @@ void secOnDoubleTap() {
       sendLine("RESP:REJECT");
     }
     waitingForApproval = false;
+    pendingChal[0] = '\0';  // each challenge is answered once
     uiShowResult(ok);  // OPEN or DENIED, then back to the previous screen
   }
 }
@@ -296,6 +307,7 @@ void securityLoop() {
   if (waitingForApproval && (now - chalStartTime > APPROVAL_TIMEOUT_MS)) {
     waitingForApproval = false;
     sendLine("RESP:REJECT");  // Timeout rejection
+    pendingChal[0] = '\0';
     uiShowResult(false);
   }
 
@@ -312,7 +324,15 @@ void securityLoop() {
 // Week 2 OnLine: Prompt user with "Approve?" instead of answering instantly
 bool securityOnLine(const char *line) {
   if (strncmp(line, "CHAL:", 5) != 0) return false;
-  
+
+  uint8_t msg[16 + SEC_MAX_ACTION];
+  if (secParseChallenge(line, msg) == 0) {  // malformed: refuse at once, don't prompt
+    sendLine("RESP:REJECT");
+    return true;
+  }
+
+  remoteCancelHeld();  // a button already down stays silent (Pair C)
+  secFirstTapMs = 0;   // a half-finished tap from before the prompt doesn't count
   strncpy(pendingChal, line, sizeof(pendingChal) - 1);
   pendingChal[sizeof(pendingChal) - 1] = '\0';
   waitingForApproval = true;

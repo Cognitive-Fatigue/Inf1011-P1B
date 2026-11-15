@@ -1,8 +1,9 @@
 // pointer.ino - Pair C TEST: air mouse / laser pointer.
-// While the lower-left button is held, sends the watch's tilt as "TILT:x,y" 20 times a second.
+// While the lower-left button is held (about 0.6 s, Media mode only), sends the watch's tilt as
+// "TILT:x,y" 20 times a second. A tap on the same button is Pair A's Key/Media switch (watch.ino).
 // x, y: -128..128 (0,0 = watch level, 128 = tilted 90 degrees).
 // Reads the accelerometer (BMA250 on the Accelerometer TinyShield) the same way as Pair B's code.
-// NOTE: lower-left is Pair A's MODE button; it is only borrowed here for testing.
+// NOTE: lower-left is Pair A's MODE button; watch.ino decides when a press is a pointer hold.
 
 const unsigned long POINTER_SEND_MS = 50;  // send 20 times a second
 uint8_t pointerAccelAddr = 0;              // 0 = no accelerometer found
@@ -11,9 +12,14 @@ bool pointerWasOn = false;
 bool pointerCirclePrev = false;       // was the circle button down last time?
 unsigned long pointerCircleAt = 0;    // when we last sent CIRCLE (to ignore button bounce)
 
+// True when an accelerometer was found, so the pointer can work at all (watch.ino asks).
+bool pointerAvailable() {
+  return pointerAccelAddr != 0;
+}
+
 // True while the pointer button (lower left) is held. remote.ino uses this to keep other buttons quiet.
 bool pointerHeld() {
-  return pointerAccelAddr && display.getButtons(TSButtonLowerLeft);
+  return pointerAccelAddr && appModeButtonHeld();
 }
 
 bool pointerAccelWrite(uint8_t reg, uint8_t value) {
@@ -52,7 +58,7 @@ void pointerSetup() {
 
 void pointerLoop() {
   if (!pointerAccelAddr) return;
-  bool on = display.getButtons(TSButtonLowerLeft);  // laser "trigger"
+  bool on = pointerHeld();  // laser "trigger": lower left held in Media mode (watch.ino)
   if (!on) {
     if (pointerWasOn) sendLine("TILT:0,0");  // just released: tell the laptop to stop at once
     pointerWasOn = false;

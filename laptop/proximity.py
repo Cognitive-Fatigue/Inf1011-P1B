@@ -23,6 +23,11 @@ def setup(send):
     send_line = send
 
 
+def reset():
+    """Forget old readings; main.py calls this on every connect and disconnect."""
+    readings.clear()
+
+
 def lock_laptop():
     """Locks the screen. Never raises: a failed lock must not stop the link to the watch."""
     try:

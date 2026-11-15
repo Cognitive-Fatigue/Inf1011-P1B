@@ -4,12 +4,12 @@ https://learn.tinycircuits.com/Processors/TinyScreen+_Setup_Tutorial/#downloads
 https://learn.tinycircuits.com/Communication/Bluetooth-Low-Energy_TinyShield_Tutorial/  
 
 On laptop:
-- `pip install pyserial bleak pynput`
-- `git clone -b Pair-A https://github.com/Cognitive-Fatigue/Inf1011-P1B.git`
+- `git clone https://github.com/Cognitive-Fatigue/Inf1011-P1B.git`
+- `pip install pyserial bleak pynput` (or let `python setup.py` do it, see "One-command setup" below)
 - STBLE fix (do this once): the installed library's `src/arduino_bluenrg_ble.cpp` has empty functions, so Bluetooth never starts. Copy `stble-patch/arduino_bluenrg_ble.cpp` from INF1011-P1B over it, then rebuild. Without it, the watch still compiles and USB works, but no Bluetooth.
 
 To run:
-`python main.py` on laptop  
+Upload the watch code first (below), then on the laptop: `python setup.py` the first time (enrolls your watch over USB), afterwards `python laptop/main.py`  
 In arduino IDE, top left corner: file -> open -> Inf1011-P1B -> watch -> watch.ino  
 Set Tools -> Board -> TinyCircuit SAMD Board -> Tinyscreen+  
 Set Tools -> port -> port that you have inserted your tinycircuit to  
@@ -17,7 +17,7 @@ Upload code into tinycircuit via USB cable
 
 
 Verify that tinycircuit is running:
-tinycircuit displays: the button labels in the corners and the connection state in the centre (temporary test screen until the status screen is added)
+tinycircuit displays: the TinyKey boot screen, then the Key screen (lock icon, `KEY`, and the link status under it, e.g. `BLE WAIT`)
 Laptop prints `Watch connected on ...`
 Turn on and off the tinycircuit to verify that the bluetooth connection is working as it should
 
@@ -25,15 +25,25 @@ Turn on and off the tinycircuit to verify that the bluetooth connection is worki
 # TinyKey
 
 The TinyScreen+ watch works as a security key and a remote for the laptop.
-Watch (Arduino) <-- USB now, Bluetooth later --> Laptop (Python)
+Watch (Arduino) <-- USB or Bluetooth --> Laptop (Python)
+
+## One-command setup
+
+Prerequisites: install Python, upload the updated watch firmware, and connect exactly one watch by USB. Stop any existing TinyKey controller before rerunning setup.
+
+- `python setup.py` installs dependencies, enrolls the USB watch, and starts the BLE controller.
+- `python setup.py --usb` installs dependencies, enrolls the USB watch, and starts the USB controller.
+
+Setup can also be invoked by absolute path from another working directory. To enroll again without starting the controller: `python laptop/link.py --setup`.
 
 ## Who works where
 
 | Pair | Watch | Laptop |
 |---|---|---|
-| A – link and merging | `watch/watch.ino` | `laptop/link.py`, `laptop/main.py` |
-| B – security | `watch/security.ino` | `laptop/security.py` |
-| C – remote | `watch/remote.ino` | `laptop/remote.py` |
+| A – link and merging | `watch/watch.ino`, `watch/ble.ino` | `laptop/link.py`, `laptop/main.py`, `setup.py` |
+| B – security | `watch/security.ino` | `laptop/security.py`, `laptop/vault.py` |
+| C – remote | `watch/remote.ino` (+ `battery.ino`, `timer.ino`, `signal.ino`, `pointer.ino`) | `laptop/remote.py` (+ `proximity.py`, `pointer.py`) |
+| Team | `watch/ui.ino` draws every screen | |
 
 Pairs B and C never touch USB or Bluetooth. Use only these:
 
@@ -42,11 +52,13 @@ Pairs B and C never touch USB or Bluetooth. Use only these:
 
 ## Running
 
-- Get the code: `git clone -b Pair-A https://github.com/Cognitive-Fatigue/Inf1011-P1B.git`, then `cd Inf1011-P1B`. Run every `python laptop/...` command below from this folder (not from where the terminal opens, e.g. `C:\WINDOWS\system32`).
+- Get the code: `git clone https://github.com/Cognitive-Fatigue/Inf1011-P1B.git`, then `cd Inf1011-P1B`. Run every `python laptop/...` command below from this folder (not from where the terminal opens, e.g. `C:\WINDOWS\system32`).
 - Watch: open `watch/watch.ino` in the Arduino IDE (the other tabs load with it), board "TinyScreen+", upload. Needs the STBLE library and the BLE TinyShield on the stack.
 - STBLE fix (do this once): the installed library's `src/arduino_bluenrg_ble.cpp` has empty functions, so Bluetooth never starts. Copy `stble-patch/arduino_bluenrg_ble.cpp` over it (library folder: Arduino `libraries/STBLE/src/`), then rebuild. Without it, the watch still compiles and USB works, but no Bluetooth.
-- Laptop: `pip install pyserial bleak pynput`, then `python laptop/main.py` (Bluetooth; it finds the watch by the name `TinyKey`). Add `--usb` to use the cable instead. Turn the laptop's Bluetooth on first.
-- Several watches in one room: they all advertise as `TinyKey`, and a laptop connects to the first one it finds. Give yours its own name in both `watch/ble.ino` (`BLE_NAME`) and `laptop/link.py` (`WATCH_NAME`), e.g. `TinyKey2`, and don't commit that change.
+- Laptop, first time: `python setup.py` (see "One-command setup"). Later: `python laptop/main.py` for Bluetooth or `python laptop/main.py --usb` for the cable. Turn the laptop's Bluetooth on first. The watch must have the updated firmware uploaded; older firmware does not answer the ID query.
+- Several watches in one room: each watch advertises its own name, `TinyKey-` plus the first 12 hex digits of its chip ID, and the laptop only connects to the watch it enrolled (it checks the full 128-bit ID with `ID?` on every connection). The enrolment is saved per laptop (`%LOCALAPPDATA%\TinyKey\pairing.json` on Windows, `~/.config/tinykey/pairing.json` elsewhere), so nothing needs changing in the code.
+- USB being connected does not switch a running controller from BLE to USB. The watch's USB/BLE status reports detected links and does not prove which transport the controller selected. Two laptops enrolled to the same watch can still compete for its connection. Matching is identity selection, not authentication or exclusive ownership.
+- Unit tests (no watch needed): `cd laptop`, then `python -m unittest link_test setup_test integration_test`. (`pointer_test.py` is a manual script that moves your real mouse, so it is not part of this; run it on its own with `python laptop/pointer_test.py`.)
 - Link test: `python laptop/echo_test.py` sends 100 random lines and checks they all come back. `--usb` tests the cable; `--reconnect 10` also drops the Bluetooth link 10 times and checks each reconnect takes under 5 s.
 - Disconnect test on battery: upload over USB, unplug the cable and switch the watch on.
   - `python laptop/echo_test.py 20 --reconnect 10`: the watch drops the link itself. Each reconnect prints its time (e.g. `reconnect 3: 2.2 s`, `FAIL` if 5 s or more), then `10/10 reconnects under 5 s` if all passed.
@@ -68,8 +80,11 @@ Pairs B and C never touch USB or Bluetooth. Use only these:
 
 | Message | Sent by | Meaning |
 |---|---|---|
-| `CHAL:<32 hex>:VAULT` | B | "Approve opening the vault?" The hex is a random 16-byte challenge. |
+| `CHAL:<32 hex>:VAULT` | B | "Approve opening the vault?" The hex is a random 16-byte challenge. A malformed CHAL is answered with `RESP:REJECT` at once. |
+| `ID?` | A | Asks for the watch's 128-bit chip ID (enrolment, and the check on every connection). |
+| `SYNC` | A | Request the watch's current mode after each connection. |
 | `ECHO:<text>` | A | Link test. The watch sends the same line back. |
+| `DROP` | A | Reconnect test: the watch ends the Bluetooth link itself. |
 | `TIME:<hh:mm:ss>` | C | The laptop's local time, in reply to `TIME?`. Sets the watch's clock. |
 
 ### Watch to laptop
@@ -83,8 +98,16 @@ Pairs B and C never touch USB or Bluetooth. Use only these:
 | `CMD:SKIP` | C | Media next track. Upper left, long press. |
 | `CMD:VOLUP` / `CMD:VOLDN` | C | Media volume up / down. Upper right / lower right, short press. |
 | `TIME?` | C | Asks the laptop for the time (every 5 s until answered, then hourly). |
+| `MODE:KEY` / `MODE:MEDIA` | A | Current mode, after `SYNC` and on every mode change; the laptop accepts remote commands only after `MODE:MEDIA`. |
+| `ID:<32 hex>` | A | Reply to `ID?`. |
+| `RSSI:<number>` | C | Bluetooth signal strength in dBm, once a second (see early lock below). |
+| `TILT:<x>,<y>` / `CIRCLE` | C | Laser pointer: tilt while the pointer is held, and a circle highlight (see below). |
 
 One button press sends exactly one message.
+
+The lower-left button toggles Key/Media. Remote commands (buttons and pointer) are sent and accepted only in Media mode, with the laptop synced, and never during an approval.
+The watch starts in Key mode and drops back to Key mode when the synced laptop link is lost.
+The laptop locks its Windows session once each time a connected watch disconnects, in either mode.
 
 ### Proposed, not agreed yet
 
@@ -109,25 +132,26 @@ Each label on screen sits next to the button it belongs to. **Tap** = short pres
 | Upper left | `PLAY` play/pause | `SKIP` next track |
 | Upper right | `VOL+` volume up | `NEXT` next slide |
 | Lower right | `VOL-` volume down | `BACK` previous slide |
-| Lower left | `MODE` (Pair A's mode switch) | – |
+| Lower left | `MODE` (Pair A's mode switch: Key ⇄ Media) | Laser pointer (Media mode only, see below) |
 | **Upper right + lower right together** | Reset the presentation timer | – |
 
 One press sends exactly one message. Holding sends the long command once (nothing extra on release).
+In Key mode, with no synced laptop, and during an approval, the buttons send nothing.
 
-### Screen layout
+### Screen layout (Media mode)
 
 ```
-PLAY        87%        VOL+    ← battery %
-SKIP       03:25       NEXT    ← presentation timer
-          (status)             ← Pair A's area
-           [NEXT]      VOL-    ← press feedback
-MODE                   BACK
+PLAY    ▂▄▆█ ▭ 87     VOL+    ← signal bars, battery icon and %
+SKIP       03:25       NEXT    ← presentation timer (clock while it isn't running)
+           MEDIA       VOL-    ← mode (Pair A's status screen)
+MODE     BLE LINK      BACK    ← link status: BLE LINK, USB LINK, BLE+USB, BLE WAIT or NO LINK
 ```
+Corner labels are icons: the short press is bright, the long press is dim under it. The Key-mode screen shows a lock, `KEY`, and the same link status line.
 
 ### Extra features
 
-**Press feedback** (`watch/remote.ino`)
-After each command, its name (e.g. `NEXT`, `VOLUP`) shows at the bottom middle for 0.7 s, so you can see the press worked.
+**Press feedback** (`watch/remote.ino` + `watch/ui.ino`)
+After each command, the corner of the button that sent it lights up for 0.3 s, so you can see the press worked.
 
 **Battery %** (`watch/battery.ino`)
 Shows the battery level at the top middle, measured every 10 s from the battery voltage (4.2 V = 100%, 3.5 V = 0%).
@@ -182,7 +206,7 @@ Signal measured in testing (watch on its own, no case):
 4. Timer: hold NEXT and it starts counting. Press both right buttons and it disappears.
 5. Early lock: walk slowly to about 5 m and stand still. After about 4 s the terminal prints `Signal weak: locking laptop` and Windows locks.
 6. False-alarm check: sit at the laptop for 2-3 minutes using it normally. It should never lock.
-7. Laser Pointer Feature: Hold MODE + tilt = move mouse. Hold MODE + tap PLAY = circle highlight. Ctrl+L in slideshow shows red laser dot. 
+7. Laser Pointer Feature (Media mode): hold MODE for about 0.6 s, then tilt = move mouse. Keep holding MODE + tap PLAY = circle highlight. Releasing after a hold does not switch mode; a quick tap does. Ctrl+L in slideshow shows red laser dot. 
 
 ### Known limitations
 
@@ -190,4 +214,4 @@ Signal measured in testing (watch on its own, no case):
 - **The 3D-printed case or your body** can weaken the signal. Re-check the numbers above with the watch in its case and adjust `LOCK_BELOW` if needed.
 - **Battery %** is an estimate and shows about 100% while charging.
 - **The timer reset combo** isn't shown on screen (no space), so mention it in the demo.
-- **`remoteActive()`** still always returns `true`. It needs Pair A's `isMediaMode()` and Pair B's `isApprovalActive()` so the buttons stay silent in Key mode and during approval.
+- **Pointer start delay:** the pointer starts about 0.6 s after MODE is pressed, because a quicker tap is the Key/Media switch.

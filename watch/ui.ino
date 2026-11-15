@@ -1,6 +1,7 @@
 // ui.ino - every watch screen is drawn here (team file). The other tabs only report state through
 // the ui...() calls below, so no two tabs draw over each other.
 // Screens: boot, media, pointer, key mode, approval prompt, approval result.
+// The media and key screens are Pair A's status screen: mode in the centre, link status under it.
 
 // 8-bit colours are BBBGGGRR (3 bits blue, 3 green, 2 red).
 const uint8_t UI_WHITE = TS_8b_White;
@@ -19,8 +20,9 @@ const unsigned long UI_FLASH_MS = 300;    // a pressed corner stays lit this lon
 const unsigned long UI_RESULT_MS = 1500;  // OPEN / DENIED stays on screen this long
 
 uint8_t uiScreen = UI_BOOT;
-bool uiKeyMode = false;   // Pair A's mode switch sets this with uiSetKeyMode()
+bool uiKeyMode = true;    // Pair A's mode switch sets this with uiSetKeyMode(); the watch boots in Key mode
 bool uiLinked = false;    // laptop connected over Bluetooth or USB
+const char *uiLinkShown = "";  // Pair A's link label currently drawn (appLinkLabel())
 bool uiNoAccel = false;
 int uiBattery = -1;       // %, -1 = not measured yet
 uint8_t uiBars = 0;       // signal strength, 0-4
@@ -157,11 +159,20 @@ void uiDrawTimer() {
 
 void uiDrawMediaTag() {
   display.clearWindow(20, 40, 56, 11);
+  uiText("MEDIA", 0, 41, uiLinked ? UI_TEAL : UI_GREY, UI_BLACK, 1);
+}
+
+// Pair A's connection status (BLE LINK, USB LINK, BLE+USB, BLE WAIT, NO LINK), bottom middle
+// between the MODE button and the lower-right corner. Amber while no laptop is connected.
+void uiDrawLink() {
+  uiLinkShown = appLinkLabel();
+  display.clearWindow(12, 52, 68, 12);
   if (uiLinked) {
-    uiText("MEDIA", 0, 41, UI_TEAL, UI_BLACK, 1);
+    uiText(uiLinkShown, 0, 53, UI_GREY, UI_BLACK, 1);
   } else {
-    uiBox(22, 40, 52, 10, UI_AMBER_DARK);
-    uiText("NO LINK", 0, 41, UI_AMBER, UI_AMBER_DARK, 1);
+    int w = display.getPrintWidth((char *)uiLinkShown);
+    uiBox((96 - w) / 2 - 3, 52, w + 6, 10, UI_AMBER_DARK);
+    uiText(uiLinkShown, 0, 53, UI_AMBER, UI_AMBER_DARK, 1);
   }
 }
 
@@ -170,11 +181,12 @@ void uiDrawMediaTag() {
 void uiDrawScreen() {
   display.clearWindow(0, 0, 96, 64);
   if (uiScreen == UI_MEDIA) {
-    for (uint8_t c = 0; c < 3; c++) uiDrawCorner(c, false);
+    remoteDrawLabels();  // Pair C's corner labels, redrawn on every Media redraw
     uiDrawModeButton(false);
     uiDrawStatus();
     uiDrawTimer();
     uiDrawMediaTag();
+    uiDrawLink();
   } else if (uiScreen == UI_POINTER) {
     uiIcon(UI_ICON(UI_ICON_CIRCLE), 2, 2, UI_WHITE, 1, false);  // upper left draws a circle while pointing
     uiDrawModeButton(true);
@@ -188,6 +200,7 @@ void uiDrawScreen() {
     uiIcon(UI_ICON(UI_ICON_LOCK), 41, 16, UI_AMBER, 2, false);
     uiBox(36, 40, 24, 10, UI_AMBER_DARK);
     uiText("KEY", 0, 41, UI_AMBER, UI_AMBER_DARK, 1);
+    uiDrawLink();
   } else if (uiScreen == UI_APPROVE) {
     uiFrame(UI_AMBER);
     uiBigText("Approve?", 10, UI_AMBER, false);
@@ -286,13 +299,14 @@ void uiShowResult(bool ok) {
 
 void uiLoop() {
   unsigned long now = millis();
-  bool linked = bleConnected || SerialUSB.dtr();  // dtr(): `if (SerialUSB)` waits 10 ms every call
+  bool linked = bleConnected || appUsbActive();  // Pair A's USB check: DTR stays set after unplugging
   if (linked != uiLinked) {
     uiLinked = linked;
     if (!linked) uiBars = 0;
     if (uiScreen == UI_MEDIA) uiDrawScreen();
     else if (uiScreen == UI_POINTER || uiScreen == UI_KEY) uiDrawStatus();
   }
+  if (appLinkLabel() != uiLinkShown && (uiScreen == UI_MEDIA || uiScreen == UI_KEY)) uiDrawLink();
   if (uiScreen == UI_MEDIA && pointerHeld()) {
     uiScreen = UI_POINTER;
     uiFlashCorner = -1;

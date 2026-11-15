@@ -3,7 +3,7 @@
 // (https://github.com/TinyCircuits/TinyCircuits-STBLE-Library).
 // Lines travel in packets of at most 20 bytes; the newline marks the end of a line.
 
-const char BLE_NAME[] = "TinyKey";  // the laptop looks for this name
+char BLE_NAME[21];
 const uint8_t BLE_PACKET = 20;
 
 bool blePresent = true;  // false when the shield did not answer at startup; USB keeps working
@@ -34,8 +34,17 @@ void bleSetup() {
   BNRG_SPI_Init();
   BlueNRG_RST();
 
-  uint8_t bdaddr[] = {0x12, 0x34, 0x00, 0xE1, 0x80, 0x02};
-  if (aci_hal_write_config_data(CONFIG_DATA_PUBADDR_OFFSET, CONFIG_DATA_PUBADDR_LEN, bdaddr) != BLE_STATUS_SUCCESS) {
+  const uint32_t *uid = (const uint32_t *)0x0080A00C;
+  uint32_t words[] = {uid[0], uid[13], uid[14], uid[15]};
+  char identity[33];
+  snprintf(identity, sizeof(identity), "%08lx%08lx%08lx%08lx",
+           (unsigned long)words[0], (unsigned long)words[1], (unsigned long)words[2], (unsigned long)words[3]);
+  snprintf(BLE_NAME, sizeof(BLE_NAME), "TinyKey-%.12s", identity);
+  uint8_t bdaddr[6] = {0};
+  for (uint8_t i = 0; i < 6; i++)
+    for (uint8_t w = 0; w < 4; w++) bdaddr[i] ^= (uint8_t)(words[w] >> (((i + w) % 4) * 8));
+  bdaddr[5] = (bdaddr[5] & 0x3F) | 0xC0;  // static random address
+  if (hci_le_set_random_address(bdaddr) != BLE_STATUS_SUCCESS) {
     // no BLE shield answering: a floating IRQ pin would keep firing HCI_Isr and stall the watch
     detachInterrupt(BNRG_SPI_EXTI_PIN);
     bleAdvertise = false;
@@ -45,7 +54,7 @@ void bleSetup() {
   aci_gatt_init();
 
   uint16_t service_handle, dev_name_char_handle, appearance_char_handle;
-  aci_gap_init_IDB05A1(GAP_PERIPHERAL_ROLE_IDB05A1, 0, 0x07, &service_handle, &dev_name_char_handle, &appearance_char_handle);
+  aci_gap_init_IDB05A1(GAP_PERIPHERAL_ROLE_IDB05A1, 0, sizeof(BLE_NAME) - 1, &service_handle, &dev_name_char_handle, &appearance_char_handle);
   aci_gatt_update_char_value(service_handle, dev_name_char_handle, 0, strlen(BLE_NAME), (uint8_t *)BLE_NAME);
 
   uint8_t uuid[16];
@@ -67,7 +76,7 @@ void bleLoop() {
   static unsigned long lastTry = 0;
   if (bleAdvertise && millis() - lastTry >= 100) {
     lastTry = millis();
-    char adv[sizeof(BLE_NAME)];  // AD type byte + name without the terminating 0
+    char adv[sizeof(BLE_NAME)];  // AD type byte + complete name
     adv[0] = AD_TYPE_COMPLETE_LOCAL_NAME;
     memcpy(adv + 1, BLE_NAME, sizeof(BLE_NAME) - 1);
     hci_le_set_scan_resp_data(0, NULL);
@@ -75,7 +84,7 @@ void bleLoop() {
                                               NO_WHITE_LIST_USE, sizeof(adv), adv, 0, NULL, 0, 0);
     bleAdvertise = ret != BLE_STATUS_SUCCESS;  // the chip can refuse right after a disconnect: retry until it takes
   }
-  while (bleRxTail != bleRxHead) feedByte(bleIn, bleRx[bleRxTail++]);
+  while (bleRxTail != bleRxHead) feedByte(bleIn, bleRx[bleRxTail++], true);
 }
 
 // Sends one notification, retrying while the radio's buffers are full.
