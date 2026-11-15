@@ -22,13 +22,25 @@ pending = None  # the challenge we are waiting on; each one is used once, so a r
 
 
 def setup(send):
-    global send_line
+    global send_line, pending
     send_line = send
+    pending = None
     try:
         loop = asyncio.get_running_loop()  # main.py's link loop
     except RuntimeError:
         return  # not inside main.py (e.g. the self-test below): no window
     vault.start(lambda: ask_from_window(loop))
+
+
+def is_pending():
+    """True while a challenge is waiting for the watch's reply (main.py keeps the remote quiet then)."""
+    return pending is not None
+
+
+def disconnect():
+    """Forget approval state so no reply can authorize a later connection."""
+    global pending
+    pending = None
 
 
 def ask_from_window(loop):

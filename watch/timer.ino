@@ -55,7 +55,7 @@ bool clockOnLine(const char *line) {
 // Call every loop.
 void clockLoop() {
   unsigned long now = millis();
-  bool linked = bleConnected || SerialUSB.dtr();  // dtr(): `if (SerialUSB)` waits 10 ms every call
+  bool linked = bleConnected || appUsbActive();  // Pair A's USB check: DTR stays set after unplugging
   bool stale = clockSyncSecs < 0 || now - clockSyncAt >= CLOCK_RESYNC_MS;
   if (linked && stale && (!clockAsked || now - clockAskedAt >= CLOCK_ASK_MS)) {
     clockAsked = true;
