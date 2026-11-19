@@ -30,6 +30,7 @@ const unsigned long SEC_DEAD_MS = 60;      // ignore the ringing for this long a
 const unsigned long SEC_MIN_GAP_MS = 80;   // second tap must come at least this long after the first
 const unsigned long SEC_MAX_GAP_MS = 450;  // ...and at most this long
 const unsigned long SEC_SAMPLE_MS = 5;     // read the accelerometer every 5 ms (200 times a second)
+const unsigned long SEC_BUTTON_QUIET_MS = 100;  // jolts while a button is down or this soon after release are not taps
 
 // ---------- SHA-256 (FIPS 180-4) ----------
 const uint32_t SEC_K[64] = {
@@ -226,6 +227,7 @@ unsigned long secLastSampleMs = 0;
 unsigned long secLastBusyMs = 0;     // last time the watch was not still
 unsigned long secDeadUntilMs = 0;    // ignoring ringing until then
 unsigned long secFirstTapMs = 0;     // 0: waiting for a first tap
+unsigned long secButtonAt = 0;       // last time any button was seen down
 unsigned long secDoubleTaps = 0;
 
 // ---------- Week 2 Approval State Variables ----------
@@ -266,7 +268,7 @@ void secOnDoubleTap() {
   }
 }
 
-bool secTapSample(const int *a, unsigned long now) {
+bool secTapSample(const int *a, unsigned long now, bool buttonActive) {
   if (!secHavePrev) {
     memcpy(secPrev, a, sizeof(secPrev));
     secHavePrev = true;
@@ -277,6 +279,13 @@ bool secTapSample(const int *a, unsigned long now) {
 
   bool wasStill = now - secLastBusyMs >= SEC_QUIET_BEFORE_MS;
   if (jerk >= SEC_QUIET_JERK) secLastBusyMs = now;
+  // A button press and its release jolt the watch like two taps: drop any half-finished double-tap
+  // and treat the watch as moving, so the next first tap needs SEC_QUIET_BEFORE_MS of stillness again.
+  if (buttonActive) {
+    secLastBusyMs = now;
+    secFirstTapMs = 0;
+    return false;
+  }
 
   if (secFirstTapMs && now - secFirstTapMs > SEC_MAX_GAP_MS) {
     secFirstTapMs = 0;
@@ -318,7 +327,8 @@ void securityLoop() {
   secLastSampleMs = now;
   int a[3];
   if (!secAccelRead(a)) { secHavePrev = false; return; }
-  if (secTapSample(a, now)) secOnDoubleTap();
+  if (display.getButtons()) secButtonAt = now;
+  if (secTapSample(a, now, now - secButtonAt < SEC_BUTTON_QUIET_MS)) secOnDoubleTap();
 }
 
 // Week 2 OnLine: Prompt user with "Approve?" instead of answering instantly
